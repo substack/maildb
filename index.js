@@ -4,6 +4,7 @@ var cas = require('content-addressable-store');
 var through = require('through2');
 var split = require('split');
 var headers = require('parse-header-stream');
+var batch = require('level-create-batch');
 
 module.exports = Mail;
 
@@ -23,13 +24,13 @@ Mail.prototype.save = function () {
     var rows = [];
     var h = stream.pipe(this.store.addStream());
     h.on('end', function () {
-        self.db.batch([
-            { key: [ 'email', h.hash ], value: fields },
-            { key: [ 'from', fields.from, h.hash ], value: 0 },
-            { key: [ 'date', Date.now(), h.hash ], value: 0 },
-            { key: [ 'recent', h.hash ], value: 0 },
-            { key: [ 'unseen', h.hash ], value: 0 },
-        ].filter(Boolean));
+        batch(self.db, [
+            { type: 'create', key: [ 'email', h.hash ], value: fields },
+            { type: 'put', key: [ 'from', fields.from, h.hash ], value: 0 },
+            { type: 'put', key: [ 'date', Date.now(), h.hash ], value: 0 },
+            { type: 'put', key: [ 'recent', h.hash ], value: 0 },
+            { type: 'put', key: [ 'unseen', h.hash ], value: 0 },
+        ], function (err) { if (err) stream.emit('error', err) });
     });
     stream.pipe(headers(function (err, fields_) {
         if (err) stream.emit('error', err);
