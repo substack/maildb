@@ -1,0 +1,9 @@
+Date: 23 Oct 81 11:22:33
+From: SMTP@HOSTY.ARPA
+To: JOE@HOSTW.ARPA
+Subject: Mail System Problem
+
+Sorry JOE, your message to SAM@HOSTZ.ARPA lost.
+
+HOSTZ.ARPA said this:
+ "550 No Such User"
