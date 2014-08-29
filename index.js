@@ -39,15 +39,22 @@ Mail.prototype.save = function () {
     return stream;
 };
 
-Mail.prototype.search = function () {
+Mail.prototype.fetch = function (indexes) {
+    var db = this.db;
+};
+
+Mail.prototype.search = function (opts) {
+    if (!opts) opts = {};
     var db = this.db;
     var stream = db.createReadStream({
         gt: [ 'date', null ],
         lt: [ 'date', undefined ]
     });
+    var seq = 0;
     return stream.pipe(through.obj(function (row, enc, next) {
         var hash = row.key[2];
-        this.push(hash);
+        seq ++;
+        this.push({ seq: seq, key: hash });
         next();
     }));
 };
