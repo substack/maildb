@@ -1,0 +1,39 @@
+{
+  "name": "maildb",
+  "version": "1.0.0",
+  "description": "leveldb and disk storage backend for email messages",
+  "main": "index.js",
+  "dependencies": {
+    "bytewise": "~0.7.1",
+    "content-addressable-store": "~1.5.1",
+    "level-create-batch": "~1.0.1",
+    "level-sublevel": "~6.3.8",
+    "parse-header-stream": "~1.0.2",
+    "split": "~0.3.0",
+    "through2": "~1.1.1"
+  },
+  "devDependencies": {
+    "tape": "^2.13.2",
+    "level": "~0.18.0"
+  },
+  "scripts": {
+    "test": "tape test/*.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/substack/maildb.git"
+  },
+  "homepage": "https://github.com/substack/maildb",
+  "keywords": [
+    "email",
+    "database",
+    "storage",
+    "db"
+  ],
+  "author": {
+    "name": "James Halliday",
+    "email": "mail@substack.net",
+    "url": "http://substack.net"
+  },
+  "license": "MIT"
+}

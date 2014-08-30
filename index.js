@@ -2,7 +2,6 @@ var sublevel = require('level-sublevel/bytewise');
 var bytewise = require('bytewise');
 var cas = require('content-addressable-store');
 var through = require('through2');
-var split = require('split');
 var headers = require('parse-header-stream');
 var batch = require('level-create-batch');
 var split = require('split');
