@@ -18,19 +18,22 @@ function Mail (db, opts) {
     this.store = cas(opts.dir || './mail.db');
 }
 
-Mail.prototype.save = function () {
+Mail.prototype.save = function (from, to) {
     var self = this;
+    to = to.toLowerCase();
+    from = from.toLowerCase();
+    
     var stream = through();
     var rows = [];
     var h = stream.pipe(this.store.addStream());
     h.on('end', function () {
         var now = Date.now();
         batch(self.db, [
-            { type: 'create', key: [ 'email', h.hash ], value: fields },
-            { type: 'put', key: [ 'from', fields.from, h.hash ], value: 0 },
-            { type: 'put', key: [ 'exists', now, h.hash ], value: 0 },
-            { type: 'put', key: [ 'recent', now, h.hash ], value: 0 },
-            { type: 'put', key: [ 'unseen', now, h.hash ], value: 0 },
+            { type: 'create', key: [ 'email', to, h.hash ], value: fields },
+            { type: 'put', key: [ 'from', to, from, h.hash ], value: 0 },
+            { type: 'put', key: [ 'exists', to, now, h.hash ], value: 0 },
+            { type: 'put', key: [ 'recent', to, now, h.hash ], value: 0 },
+            { type: 'put', key: [ 'unseen', to, now, h.hash ], value: 0 },
         ], function (err) { if (err) stream.emit('error', err) });
     });
     stream.pipe(headers(function (err, fields_) {
@@ -40,7 +43,7 @@ Mail.prototype.save = function () {
     return stream;
 };
 
-Mail.prototype.info = function (cb) {
+Mail.prototype.info = function (box, cb) {
     // todo: caching
     // exists, recent, first unseen
     
@@ -52,16 +55,16 @@ Mail.prototype.info = function (cb) {
     function done () { if (-- pending === 0) cb(null, info) }
     
     var estream = this.db.createReadStream({
-        gt: [ 'exists', null ],
-        lt: [ 'exists', undefined ]
+        gt: [ 'exists', box, null ],
+        lt: [ 'exists', box, undefined ]
     });
     var ustream = this.db.createReadStream({
-        gt: [ 'unseen', null ],
-        lt: [ 'unseen', undefined ]
+        gt: [ 'unseen', box, null ],
+        lt: [ 'unseen', box, undefined ]
     });
     var rstream = this.db.createReadStream({
-        gt: [ 'recent', null ],
-        lt: [ 'recent', undefined ]
+        gt: [ 'recent', box, null ],
+        lt: [ 'recent', box, undefined ]
     });
     
     function onerror (err) { cb(err); cb = function () {} }
@@ -70,27 +73,27 @@ Mail.prototype.info = function (cb) {
     ustream.on('error', onerror);
     
     estream.pipe(through.obj(function (row, enc, next) {
-        if (!info.head.exists) info.head.exists = row.key[2];
+        if (!info.head.exists) info.head.exists = row.key[3];
         info.counts.exists ++;
         next();
     }, done));
     ustream.pipe(through.obj(function (row, enc, next) {
-        if (!info.head.unseen) info.head.unseen = row.key[2];
+        if (!info.head.unseen) info.head.unseen = row.key[3];
         info.counts.unseen ++;
         next();
     }, done));
     rstream.pipe(through.obj(function (row, enc, next) {
-        if (!info.head.recent) info.head.recent = row.key[2];
+        if (!info.head.recent) info.head.recent = row.key[3];
         info.counts.recent ++;
         next();
     }, done));
 };
 
-Mail.prototype.search = function (query, cb) {
+Mail.prototype.search = function (box, query, cb) {
     var self = this;
     var stream = self.db.createReadStream({
-        gt: [ 'date', null ],
-        lt: [ 'date', undefined ]
+        gt: [ 'exists', box, null ],
+        lt: [ 'exists', box, undefined ]
     });
     var seq = 0, pending = 1;
     
@@ -99,7 +102,7 @@ Mail.prototype.search = function (query, cb) {
         pending ++;
         self._match(query, row, function (err, matching) {
             if (matching) {
-                var hash = row.key[2];
+                var hash = row.key[3];
                 results.push({ seq: seq, key: hash });
             }
             check();
