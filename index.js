@@ -39,22 +39,54 @@ Mail.prototype.save = function () {
     return stream;
 };
 
-Mail.prototype.fetch = function (indexes) {
+Mail.prototype.info = function (indexes) {
     var db = this.db;
-};
-
-Mail.prototype.search = function (opts) {
-    if (!opts) opts = {};
-    var db = this.db;
-    var stream = db.createReadStream({
-        gt: [ 'date', null ],
-        lt: [ 'date', undefined ]
-    });
-    var seq = 0;
-    return stream.pipe(through.obj(function (row, enc, next) {
-        var hash = row.key[2];
+    var stream = db.createReadStream(opts);
+    stream.pipe(through(function (row, enc, next) {
         seq ++;
         this.push({ seq: seq, key: hash });
         next();
     }));
 };
+
+Mail.prototype.search = function (query, cb) {
+    var self = this;
+    var stream = self.db.createReadStream({
+        gt: [ 'date', null ],
+        lt: [ 'date', undefined ]
+    });
+    var seq = 0, pending = 1;
+    
+    var results = stream.pipe(through.obj(function (row, enc, next) {
+        var rseq = ++ seq;
+        pending ++;
+        self._match(query, row, function (err, matching) {
+            if (matching) {
+                var hash = row.key[2];
+                results.push({ seq: seq, key: hash });
+            }
+            check();
+        });
+        next();
+    }, check));
+    
+    function check () { if (-- pending === 0) results.push(null) }
+    
+    if (cb) {
+        results.pipe(collect(cb));
+        results.once('error', cb);
+    }
+    stream.once('error', function (err) { results.emit('error', err) });
+    return results;
+};
+
+Mail.prototype._match = function (query, row, cb) {
+    process.nextTick(function () { cb(null, true) }); // for now;
+};
+
+function collect (cb) {
+    var rows = [];
+    return through.obj(write, end);
+    function write (row, enc, next) { rows.push(row); next() }
+    function end () { cb(null, rows) }
+}
