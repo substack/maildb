@@ -5,6 +5,7 @@ var through = require('through2');
 var split = require('split');
 var headers = require('parse-header-stream');
 var batch = require('level-create-batch');
+var split = require('split');
 
 module.exports = Mail;
 
@@ -27,16 +28,17 @@ Mail.prototype.save = function (from, rcpts) {
     from = from.toLowerCase();
     
     var stream = through();
-    var meta = { size: 0 };
+    var meta = { size: 0, headerSize: 0 };
     
     stream.pipe(through(function (buf, enc, next) {
         meta.size += buf.length;
         next();
     }));
     
-    stream.pipe(headers(function (err, fields) {
+    stream.pipe(headers({ maxSize: 4096 }, function (err, fields, m) {
         if (err) stream.emit('error', err);
         meta.fields = fields;
+        meta.headerSize = m.size;
     }));
     
     var h = stream.pipe(this.store.addStream());
@@ -74,8 +76,9 @@ Mail.prototype.fetch = function (box, seqset, field, cb) {
     function write (row, enc, next) {
         n ++;
         var seq = n;
-        if (n > start) {
-            self._getField([ box, row.key ], field, function (err, res) {
+        if (n >= start) {
+            var key = [ box, row.key[3] ];
+            self._getField(key, field, function (err, res) {
                 if (err) return output.emit('error', err);
                 output.push({ key: seq, value: res });
                 check();
@@ -93,10 +96,29 @@ Mail.prototype.fetch = function (box, seqset, field, cb) {
 };
 
 Mail.prototype._getField = function (key, field, cb) {
+    var self = this;
     this.db.get([ 'email' ].concat(key), function (err, meta) {
         if (err) return cb(err);
         if (field === 'RFC822.SIZE') {
             cb(null, meta.size);
+        }
+        else if (field === 'RFC822.HEADER') {
+            var sp = split();
+            var stream = self.store.getStream(key[1])
+                .pipe(sp)
+                .pipe(through(function (buf, enc, next) {
+                    var line = buf.toString('utf8').replace(/\r$/,'');
+                    if (line === '') {
+                        this.push(null);
+                    }
+                    else {
+                        this.push(line + '\n');
+                        next();
+                    }
+                }))
+            ;
+            stream.size = meta.headerSize;
+            cb(null, stream);
         }
         else cb(null, undefined);
     });
