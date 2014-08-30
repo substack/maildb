@@ -18,35 +18,91 @@ function Mail (db, opts) {
     this.store = cas(opts.dir || './mail.db');
 }
 
-Mail.prototype.save = function (from, to) {
+Mail.prototype.save = function (from, rcpts) {
     var self = this;
-    to = to.toLowerCase();
+    if (!Array.isArray(rcpts)) rcpts = [ rcpts ];
+    var rcpts = rcpts.filter(Boolean).map(function (s) {
+        return String(s).toLowerCase();
+    });
     from = from.toLowerCase();
     
     var stream = through();
-    var rows = [];
+    var meta = { size: 0 };
+    
+    stream.pipe(through(function (buf, enc, next) {
+        meta.size += buf.length;
+        next();
+    }));
+    
+    stream.pipe(headers(function (err, fields) {
+        if (err) stream.emit('error', err);
+        meta.fields = fields;
+    }));
+    
     var h = stream.pipe(this.store.addStream());
     h.on('end', function () {
         var now = Date.now();
-        batch(self.db, [
-            { type: 'create', key: [ 'email', to, h.hash ], value: fields },
-            { type: 'put', key: [ 'from', to, from, h.hash ], value: 0 },
-            { type: 'put', key: [ 'exists', to, now, h.hash ], value: 0 },
-            { type: 'put', key: [ 'recent', to, now, h.hash ], value: 0 },
-            { type: 'put', key: [ 'unseen', to, now, h.hash ], value: 0 },
-        ], function (err) { if (err) stream.emit('error', err) });
+        rcpts.forEach(function (to) {
+            batch(self.db, [
+                { type: 'create', key: [ 'email', to, h.hash ], value: meta },
+                { type: 'put', key: [ 'from', to, from, h.hash ], value: 0 },
+                { type: 'put', key: [ 'exists', to, now, h.hash ], value: 0 },
+                { type: 'put', key: [ 'recent', to, now, h.hash ], value: 0 },
+                { type: 'put', key: [ 'unseen', to, now, h.hash ], value: 0 },
+            ], function (err) { if (err) stream.emit('error', err) });
+        });
     });
-    stream.pipe(headers(function (err, fields_) {
-        if (err) stream.emit('error', err);
-        fields = fields_;
-    }));
     return stream;
 };
 
-Mail.prototype.info = function (box, cb) {
-    // todo: caching
-    // exists, recent, first unseen
+Mail.prototype.fetch = function (box, seqset, field, cb) {
+    var self = this;
+    var parts = String(seqset).split(':');
+    if (parts.length === 1) parts = [ parts[0], parts[0] ];
+    var start = Number(parts[0]), end = Number(parts[1]);
     
+    var opts = {
+        gt: [ 'exists', box, null ],
+        lt: [ 'exists', box, undefined ]
+    };
+    var stream = self.db.createReadStream(opts);
+    
+    var n = 0, pending = 1;
+    var output = stream.pipe(through.obj(write, check));
+    return output;
+    
+    function write (row, enc, next) {
+        n ++;
+        var seq = n;
+        if (n > start) {
+            self._getField([ box, row.key ], field, function (err, res) {
+                if (err) return output.emit('error', err);
+                output.push({ key: seq, value: res });
+                check();
+            });
+        }
+        else if (n > end) {
+            if (stream.destroy) stream.destroy();
+            check();
+        }
+        else next();
+    }
+    function check () {
+        if (-- pending === 0) output.push(null);
+    }
+};
+
+Mail.prototype._getField = function (key, field, cb) {
+    this.db.get([ 'email' ].concat(key), function (err, meta) {
+        if (err) return cb(err);
+        if (field === 'RFC822.SIZE') {
+            cb(null, meta.size);
+        }
+        else cb(null, undefined);
+    });
+};
+
+Mail.prototype.info = function (box, cb) {
     var info = {
         counts: { exists: 0, recent: 0, unseen: 0 },
         head: { unseen: null, exists: null, recent: null }
