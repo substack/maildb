@@ -57,7 +57,7 @@ Mail.prototype.save = function (from, rcpts) {
     return stream;
 };
 
-Mail.prototype.fetch = function (box, seqset, field, cb) {
+Mail.prototype.fetch = function (box, seqset, field) {
     var self = this;
     var parts = String(seqset).split(':');
     if (parts.length === 1) parts = [ parts[0], parts[0] ];
