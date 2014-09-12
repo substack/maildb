@@ -22,7 +22,7 @@ Mail.prototype.save = function (from, rcpts) {
     var self = this;
     if (!Array.isArray(rcpts)) rcpts = [ rcpts ];
     var rcpts = rcpts.filter(Boolean).map(function (s) {
-        return String(s).toLowerCase().split('@')[0];
+        return String(s).toLowerCase();
     });
     from = from.toLowerCase();
     
@@ -43,7 +43,8 @@ Mail.prototype.save = function (from, rcpts) {
     var h = stream.pipe(this.store.addStream());
     h.on('end', function () {
         var now = Date.now();
-        rcpts.forEach(function (to) {
+        rcpts.forEach(function (toFull) {
+            var to = toFull.split('@')[0];
             batch(self.db, [
                 { type: 'create', key: [ 'email', to, h.hash ], value: meta },
                 { type: 'put', key: [ 'from', to, from, h.hash ], value: 0 },
@@ -105,9 +106,8 @@ Mail.prototype._getField = function (key, rfield, cb) {
             cb(null, meta.size);
         }
         else if (field === 'RFC822.HEADER') {
-            var sp = split();
             var stream = self.store.getStream(key[1])
-                .pipe(sp)
+                .pipe(split())
                 .pipe(through(function (buf, enc, next) {
                     var line = buf.toString('utf8').replace(/\r$/,'');
                     if (line === '') {
@@ -122,7 +122,21 @@ Mail.prototype._getField = function (key, rfield, cb) {
             stream.size = meta.headerSize;
             cb(null, stream);
         }
-        else if (field === 'RFC822.HEADER') {
+        else if (field === 'RFC822.TEXT.PEEK' || field === 'RFC822.TEXT') {
+            // read without setting the seen flag
+            var inHeader = true;
+            var stream = self.store.getStream(key[1]);
+            var h = stream.pipe(headers());
+            h.on('body', function (body) {
+                body.size = meta.size - meta.headerSize;
+                cb(null, body);
+            });
+            h.on('error', cb);
+            stream.on('error', cb);
+        }
+        else if (field === 'RFC822.TEXT') {
+            // read while setting the seen flag
+            
         }
         else cb(null, undefined);
     });
