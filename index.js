@@ -22,7 +22,7 @@ Mail.prototype.save = function (from, rcpts) {
     var self = this;
     if (!Array.isArray(rcpts)) rcpts = [ rcpts ];
     var rcpts = rcpts.filter(Boolean).map(function (s) {
-        return String(s).toLowerCase();
+        return String(s).toLowerCase().split('@')[0];
     });
     from = from.toLowerCase();
     
@@ -94,10 +94,13 @@ Mail.prototype.fetch = function (box, seqset, field) {
     }
 };
 
-Mail.prototype._getField = function (key, field, cb) {
+Mail.prototype._getField = function (key, rfield, cb) {
     var self = this;
+    var field = normalizeField(rfield);
+    
     this.db.get([ 'email' ].concat(key), function (err, meta) {
         if (err) return cb(err);
+        
         if (field === 'RFC822.SIZE') {
             cb(null, meta.size);
         }
@@ -118,6 +121,8 @@ Mail.prototype._getField = function (key, field, cb) {
             ;
             stream.size = meta.headerSize;
             cb(null, stream);
+        }
+        else if (field === 'RFC822.HEADER') {
         }
         else cb(null, undefined);
     });
@@ -206,4 +211,9 @@ function collect (cb) {
     return through.obj(write, end);
     function write (row, enc, next) { rows.push(row); next() }
     function end () { cb(null, rows) }
+}
+
+function normalizeField (key) {
+    if (/^BODY\b/i.test(key)) key = key.replace(/^BODY/i, 'RFC822');
+    return key.toUpperCase();
 }
