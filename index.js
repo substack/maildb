@@ -50,7 +50,7 @@ Mail.prototype.save = function (from, rcpts) {
                 { type: 'put', key: [ 'from', to, from, h.hash ], value: 0 },
                 { type: 'put', key: [ 'exists', to, now, h.hash ], value: 0 },
                 { type: 'put', key: [ 'recent', to, now, h.hash ], value: 0 },
-                { type: 'put', key: [ 'unseen', to, now, h.hash ], value: 0 },
+                { type: 'put', key: [ 'unseen', to, now, h.hash ], value: 0 }
             ], function (err) { if (err) stream.emit('error', err) });
         });
     });
@@ -58,6 +58,26 @@ Mail.prototype.save = function (from, rcpts) {
 };
 
 Mail.prototype.fetch = function (box, seqset, field) {
+    var self = this;
+    var pending = 1;
+    var output = through.obj(write, check);
+    return self._range(box, seqset).pipe(output);
+    
+    function write (row, enc, next) {
+        var key = [ box, row.key[3] ];
+        self._getField(key, field, function (err, res) {
+            if (err) return output.emit('error', err);
+            output.push({ key: row.seq, value: res });
+            check();
+            next();
+        });
+    }
+    function check () {
+        if (--pending === 0) output.push(null);
+    }
+};
+
+Mail.prototype._range = function (box, seqset) {
     var self = this;
     var parts = String(seqset).split(':');
     if (parts.length === 1) parts = [ parts[0], parts[0] ];
@@ -75,14 +95,11 @@ Mail.prototype.fetch = function (box, seqset, field) {
     
     function write (row, enc, next) {
         n ++;
-        var seq = n;
         if (n >= start) {
-            var key = [ box, row.key[3] ];
-            self._getField(key, field, function (err, res) {
-                if (err) return output.emit('error', err);
-                output.push({ key: seq, value: res });
-                check();
-            });
+            row.seq = n;
+            output.push(row);
+            check();
+            next();
         }
         else if (n > end) {
             if (stream.destroy) stream.destroy();
@@ -214,6 +231,9 @@ Mail.prototype.search = function (box, query, cb) {
     }
     stream.once('error', function (err) { results.emit('error', err) });
     return results;
+};
+
+Mail.prototype.expunge = function (box) {
 };
 
 Mail.prototype._match = function (query, row, cb) {
