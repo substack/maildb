@@ -5,9 +5,9 @@
   "main": "index.js",
   "dependencies": {
     "bytewise": "~0.7.1",
-    "content-addressable-store": "~1.5.1",
-    "level-create-batch": "~1.0.1",
-    "level-sublevel": "~6.3.8",
+    "content-addressable-blob-store": "^4.0.4",
+    "level-create-batch": "^1.0.1",
+    "level-sublevel": "^6.3.8",
     "parse-header-stream": "^1.1.0",
     "split": "~0.3.0",
     "through2": "^1.1.1"

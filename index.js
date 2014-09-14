@@ -1,6 +1,6 @@
 var sublevel = require('level-sublevel/bytewise');
 var bytewise = require('bytewise');
-var cas = require('content-addressable-store');
+var cas = require('content-addressable-blob-store');
 var through = require('through2');
 var headers = require('parse-header-stream');
 var batch = require('level-create-batch');
@@ -40,17 +40,17 @@ Mail.prototype.save = function (from, rcpts) {
         meta.headerSize = m.size;
     }));
     
-    var h = stream.pipe(this.store.addStream());
+    var h = stream.pipe(this.store.createWriteStream());
     h.on('end', function () {
         var now = Date.now();
         rcpts.forEach(function (toFull) {
             var to = toFull.split('@')[0];
             batch(self.db, [
-                { type: 'create', key: [ 'email', to, h.hash ], value: meta },
-                { type: 'put', key: [ 'from', to, from, h.hash ], value: 0 },
-                { type: 'put', key: [ 'exists', to, now, h.hash ], value: 0 },
-                { type: 'put', key: [ 'recent', to, now, h.hash ], value: 0 },
-                { type: 'put', key: [ 'unseen', to, now, h.hash ], value: 0 }
+                { type: 'create', key: [ 'email', to, h.key ], value: meta },
+                { type: 'put', key: [ 'from', to, from, h.key ], value: 0 },
+                { type: 'put', key: [ 'exists', to, now, h.key ], value: 0 },
+                { type: 'put', key: [ 'recent', to, now, h.key ], value: 0 },
+                { type: 'put', key: [ 'unseen', to, now, h.key ], value: 0 }
             ], function (err) { if (err) stream.emit('error', err) });
         });
     });
