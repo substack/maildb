@@ -233,6 +233,42 @@ Mail.prototype.search = function (box, query, cb) {
     return results;
 };
 
+Mail.prototype.store = function (box, seqset, flags, cb) {
+    var self = this;
+    var keys = [];
+    this._range(box, seqset).pipe(through(write, end));
+    
+    function write (row, enc, next) {
+        // A003 STORE 2:4 +FLAGS (\Deleted)
+        
+        var rows = flags.map(function (fl) {
+            if (fl === 'deleted') {
+                return {
+                    type: 'put',
+                    key: [ 'deleted', box, row.key ],
+                    value: 0
+                };
+            }
+            if (fl === 'seen') {
+                return {
+                    type: 'del',
+                    key: [ 'unseen' ].concat(row.key.slice(1)),
+                    value: 0
+                };
+            }
+            if (fl === 'unseen') {
+                return {
+                    type: 'put',
+                    key: [ 'unseen', box, row.key[3] ],
+                    value: 0
+                };
+            }
+        }).filter(Boolean);
+        
+        self.batch(rows);
+    }
+};
+
 Mail.prototype.expunge = function (box) {
 };
 
