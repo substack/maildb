@@ -41,7 +41,7 @@ Mail.prototype.save = function (from, rcpts) {
     }));
     
     var h = stream.pipe(this.store.createWriteStream());
-    h.on('end', function () {
+    h.on('finish', function () {
         var now = Date.now();
         rcpts.forEach(function (toFull) {
             var to = toFull.split('@')[0];
@@ -77,8 +77,9 @@ Mail.prototype.fetch = function (box, seqset, field) {
     }
 };
 
-Mail.prototype._range = function (box, seqset) {
+Mail.prototype._range = function (box_, seqset) {
     var self = this;
+    var box = box_.split('@')[0];
     var parts = String(seqset).split(':');
     if (parts.length === 1) parts = [ parts[0], parts[0] ];
     var start = Number(parts[0]), end = Number(parts[1]);
@@ -98,8 +99,7 @@ Mail.prototype._range = function (box, seqset) {
         if (n >= start) {
             row.seq = n;
             output.push(row);
-            check();
-            next();
+            if (check()) next();
         }
         else if (n > end) {
             if (stream.destroy) stream.destroy();
@@ -108,7 +108,10 @@ Mail.prototype._range = function (box, seqset) {
         else next();
     }
     function check () {
-        if (-- pending === 0) output.push(null);
+        if (-- pending === 0) {
+            output.push(null);
+        }
+        else return true;
     }
 };
 
@@ -123,7 +126,7 @@ Mail.prototype._getField = function (key, rfield, cb) {
             cb(null, meta.size);
         }
         else if (field === 'RFC822.HEADER') {
-            var stream = self.store.getStream(key[1])
+            var stream = self.store.createReadStream({ key: key[1] })
                 .pipe(split())
                 .pipe(through(function (buf, enc, next) {
                     var line = buf.toString('utf8').replace(/\r$/,'');
@@ -142,8 +145,8 @@ Mail.prototype._getField = function (key, rfield, cb) {
         else if (field === 'RFC822.TEXT.PEEK' || field === 'RFC822.TEXT') {
             // read without setting the seen flag
             var inHeader = true;
-            var stream = self.store.getStream(key[1]);
-            var h = stream.pipe(headers());
+            var stream = self.store.createReadStream({ key: key[1] });
+            var h = stream.pipe(headers({ maxSize: 4096 }));
             h.on('body', function (body) {
                 body.size = meta.size - meta.headerSize;
                 cb(null, body);
@@ -265,7 +268,7 @@ Mail.prototype.store = function (box, seqset, flags, cb) {
             }
         }).filter(Boolean);
         
-        self.batch(rows);
+        self.batch(rows, cb);
     }
 };
 
