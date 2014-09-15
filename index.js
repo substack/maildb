@@ -65,6 +65,7 @@ Mail.prototype.fetch = function (box, seqset, field) {
     
     function write (row, enc, next) {
         var key = [ box, row.key[3] ];
+        pending ++;
         self._getField(key, field, function (err, res) {
             if (err) return output.emit('error', err);
             output.push({ key: row.seq, value: res });
@@ -91,24 +92,29 @@ Mail.prototype._range = function (box_, seqset) {
     var stream = self.db.createReadStream(opts);
     
     var n = 0, pending = 1;
-    var output = stream.pipe(through.obj(write, check));
+    var ended = false;
+    var output = stream.pipe(through.obj(write, end));
     return output;
     
     function write (row, enc, next) {
         n ++;
-        if (n >= start) {
+        if (n >= start && n <= end) {
             row.seq = n;
             output.push(row);
-            if (check()) next();
+            next();
         }
-        else if (n > end) {
+        if (n >= end) {
             if (stream.destroy) stream.destroy();
             check();
         }
         else next();
     }
+    function end () {
+        ended = true;
+        check();
+    }
     function check () {
-        if (-- pending === 0) {
+        if (-- pending === 0 && (n >= end || ended)) {
             output.push(null);
         }
         else return true;
