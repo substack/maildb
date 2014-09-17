@@ -91,34 +91,19 @@ Mail.prototype._range = function (box_, seqset) {
     };
     var stream = self.db.createReadStream(opts);
     
-    var n = 0, pending = 1;
-    var ended = false;
-    var output = stream.pipe(through.obj(write, end));
-    return output;
-    
-    function write (row, enc, next) {
+    var n = 0;
+    return stream.pipe(through.obj(function (row, enc, next) {
         n ++;
         if (n >= start && n <= end) {
             row.seq = n;
-            output.push(row);
-            next();
+            this.push(row);
         }
-        if (n >= end) {
+        if (n > end) {
             if (stream.destroy) stream.destroy();
-            check();
+            this.push(null);
         }
         else next();
-    }
-    function end () {
-        ended = true;
-        check();
-    }
-    function check () {
-        if (-- pending === 0 && (n >= end || ended)) {
-            output.push(null);
-        }
-        else return true;
-    }
+    }));
 };
 
 Mail.prototype._getField = function (key, rfield, cb) {
