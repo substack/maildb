@@ -15,7 +15,7 @@ function Mail (db, opts) {
         keyEncoding: bytewise,
         valueEncoding: 'json'
     });
-    this.store = cas(opts.dir || './mail.db');
+    this.blob = cas(opts.dir || './mail.db');
 }
 
 Mail.prototype.save = function (from, rcpts) {
@@ -40,14 +40,13 @@ Mail.prototype.save = function (from, rcpts) {
         meta.headerSize = m.size;
     }));
     
-    var h = stream.pipe(this.store.createWriteStream());
+    var h = stream.pipe(this.blob.createWriteStream());
     h.on('finish', function () {
         var now = Date.now();
         rcpts.forEach(function (toFull) {
             var to = toFull.split('@')[0];
             batch(self.db, [
                 { type: 'create', key: [ 'email', to, h.key ], value: meta },
-                { type: 'put', key: [ 'from', to, from, h.key ], value: 0 },
                 { type: 'put', key: [ 'exists', to, now, h.key ], value: 0 },
                 { type: 'put', key: [ 'recent', to, now, h.key ], value: 0 },
                 { type: 'put', key: [ 'unseen', to, now, h.key ], value: 0 }
@@ -117,7 +116,7 @@ Mail.prototype._getField = function (key, rfield, cb) {
             cb(null, meta.size);
         }
         else if (field === 'RFC822.HEADER') {
-            var stream = self.store.createReadStream({ key: key[1] })
+            var stream = self.blob.createReadStream({ key: key[1] })
                 .pipe(split())
                 .pipe(through(function (buf, enc, next) {
                     var line = buf.toString('utf8').replace(/\r$/,'');
@@ -136,7 +135,7 @@ Mail.prototype._getField = function (key, rfield, cb) {
         else if (field === 'RFC822.TEXT.PEEK' || field === 'RFC822.TEXT') {
             // read without setting the seen flag
             var inHeader = true;
-            var stream = self.store.createReadStream({ key: key[1] });
+            var stream = self.blob.createReadStream({ key: key[1] });
             var h = stream.pipe(headers({ maxSize: 4096 }));
             h.on('body', function (body) {
                 body.size = meta.size - meta.headerSize;
@@ -227,15 +226,18 @@ Mail.prototype.search = function (box, query, cb) {
     return results;
 };
 
-Mail.prototype.store = function (box, seqset, flags, cb) {
+Mail.prototype.store = function (box, seqset, type, fields, cb) {
     var self = this;
     var keys = [];
-    this._range(box, seqset).pipe(through(write, end));
+    var ops = [];
+    this._range(box, seqset).pipe(through.obj(write, end));
     
     function write (row, enc, next) {
         // A003 STORE 2:4 +FLAGS (\Deleted)
         
-        var rows = flags.map(function (fl) {
+        ops.push.apply(ops, fields.map(function (fl) {
+            fl = fl.toLowerCase().replace(/^\\/, '');
+            
             if (fl === 'deleted') {
                 return {
                     type: 'put',
@@ -257,13 +259,48 @@ Mail.prototype.store = function (box, seqset, flags, cb) {
                     value: 0
                 };
             }
-        }).filter(Boolean);
+        }).filter(Boolean));
         
-        self.batch(rows, cb);
+        next();
+    }
+    function end () {
+        self.db.batch(ops, cb)
     }
 };
 
-Mail.prototype.expunge = function (box) {
+Mail.prototype.expunge = function (box, cb) {
+    var self = this;
+    var ops = [];
+    var stream = self.db.createReadStream({
+        gt: [ 'deleted', box, null ],
+        lt: [ 'deleted', box, undefined ]
+    });
+    var expunged = 0;
+    stream.on('error', function (err) { cb(err) });
+    stream.pipe(through.obj(write, end));
+    
+    function write (row, enc, next) {
+        var to = row.key[2][1];
+        var now = row.key[2][2];
+        var hkey = row.key[2][3];
+        expunged ++;
+        
+        ops.push([
+            { type: 'del', key: row.key[2] },
+            { type: 'del', key: [ 'email', to, hkey ] },
+            { type: 'del', key: [ 'exists', to, now, hkey ] },
+            { type: 'del', key: [ 'recent', to, now, hkey ] },
+            { type: 'del', key: [ 'unseen', to, now, hkey ] }
+        ]);
+        next();
+    }
+    
+    function end () {
+        self.db.batch(ops, function (err) {
+            if (err) cb(err)
+            else cb(null, expunged)
+        });
+    }
 };
 
 Mail.prototype._match = function (query, row, cb) {
