@@ -133,6 +133,31 @@ Return a readable stream `rstream` or collect the results into `cb(err,
 results)`. Each result is an object with a key hash property `key` and sequence
 integer property `seq`.
 
+## mailbox.store(box, seqset, type, fields, cb)
+
+For a mailbox user account string `box` and `seqset`, a string of the form
+`start:end` that refers to messages by their sequence numbers, tag each
+matching message with `fields` according to `type` which
+is a string that matches `/^[+-]?FLAGS(?:\.SILENT)?$/`.
+
+`fields` is an array of case-insensitive string tags, optionally with a leading
+`'\\'`. For example:
+
+```
+[ '\\Seen', '\\Deleted' ]
+```
+
+This format is taken directly from the RFC so that you can plug the values for
+the `STORE` command directly into this method signature.
+
+These arguments are documented in more detail in
+[RFC 3501](www.faqs.org/rfcs/rfc3501.html) section 6.4.6.
+
+## mailbox.expunge(box, cb)
+
+Remove all messages in a mailbox user string `box` marked as deleted.
+`cb(err, n)` fires with the number of deleted messages `n`.
+
 # install
 
 With [npm](https://npmjs.org) do:
