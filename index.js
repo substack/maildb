@@ -159,7 +159,8 @@ Mail.prototype._getField = function (key, rfield, cb) {
     });
 };
 
-Mail.prototype.info = function (box, cb) {
+Mail.prototype.info = function (box_, cb) {
+    var box = box_.split('@')[0];
     var info = {
         counts: { exists: 0, recent: 0, unseen: 0 },
         head: { unseen: null, exists: null, recent: null }
