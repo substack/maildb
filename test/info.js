@@ -55,6 +55,10 @@ expected.xxx = {
         recent: '61730c68aafadfc05df9b858708254f98cab57aceab94404a5d98ccbdaa6879e'
     }
 };
+expected.nosuch = {
+    counts: { exists: 0, recent: 0, unseen: 0 },
+    head: { unseen: null, exists: null, recent: null }
+};
 
 test('info', function (t) {
     t.plan(messages.length + 12);
@@ -89,11 +93,11 @@ test('info', function (t) {
         
         mail.info('nosuch@substack.net', function (err, info) {
             t.ifError(err);
-            t.deepEqual(info, {});
+            t.deepEqual(info, expected.nosuch);
         });
         mail.info('nosuch', function (err, info) {
             t.ifError(err);
-            t.deepEqual(info, {});
+            t.deepEqual(info, expected.nosuch);
         });
     }
 });
