@@ -285,7 +285,7 @@ Mail.prototype.expunge = function (box, cb) {
         var hkey = row.key[2][3];
         expunged ++;
         
-        ops.push([
+        ops.push.apply(ops, [
             { type: 'del', key: row.key[2] },
             { type: 'del', key: [ 'email', to, hkey ] },
             { type: 'del', key: [ 'exists', to, now, hkey ] },
