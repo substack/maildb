@@ -18,7 +18,7 @@ function Mail (db, opts) {
     this.blob = cas(opts.dir || './mail.db');
 }
 
-Mail.prototype.save = function (from, rcpts) {
+Mail.prototype.save = function (from, rcpts, cb) {
     var self = this;
     if (!Array.isArray(rcpts)) rcpts = [ rcpts ];
     var rcpts = rcpts.filter(Boolean).map(function (s) {
@@ -50,9 +50,16 @@ Mail.prototype.save = function (from, rcpts) {
                 { type: 'put', key: [ 'exists', to, now, h.key ], value: 0 },
                 { type: 'put', key: [ 'recent', to, now, h.key ], value: 0 },
                 { type: 'put', key: [ 'unseen', to, now, h.key ], value: 0 }
-            ], function (err) { if (err) stream.emit('error', err) });
+            ], function (err) {
+                if (err) stream.emit('error', err)
+                else stream.emit('key', h.key)
+            });
         });
     });
+    if (cb) {
+        stream.once('key', function (key) { cb(null, key) });
+        stream.once('error', cb);
+    }
     return stream;
 };
 

@@ -90,11 +90,14 @@ Create a new `mailbox` from a leveldb handle `db` and options:
 
 `opts.dir` - directory to store emails by the hash of their content
 
-## var wstream = mailbox.save(from, recipients)
+## var wstream = mailbox.save(from, recipients, cb)
 
 Return a writable stream `wstream` to save an incoming email from an originator
 string `from` to an array of string `recipients`. `wstream` should get the
 entire email contents written to it, including headers.
+
+Optionally pass in a `cb(err, key)` callback to capture any errors and the blob
+store key.
 
 ## var rstream = mailbox.fetch(box, seqset, field)
 
