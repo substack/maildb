@@ -15,7 +15,7 @@ mkdirp.sync(blobdir);
 var db = level(path.join(tmpdir, 'db'));
 var mail = maildb(db, { dir: blobdir });
 
-test('mail', function (t) {
+test('save', function (t) {
     t.plan(2);
     
     var from = 'beep@beep.beep';
