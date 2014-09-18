@@ -1,6 +1,6 @@
 var sublevel = require('level-sublevel/bytewise');
 var bytewise = require('bytewise');
-var cas = require('content-addressable-blob-store');
+var blob = require('content-addressable-blob-store');
 var through = require('through2');
 var headers = require('parse-header-stream');
 var batch = require('level-create-batch');
@@ -15,7 +15,7 @@ function Mail (db, opts) {
         keyEncoding: bytewise,
         valueEncoding: 'json'
     });
-    this.blob = cas(opts.dir || './mail.db');
+    this.blob = opts.store || blob({ path: opts.dir });
 }
 
 Mail.prototype.save = function (from, rcpts, cb) {
