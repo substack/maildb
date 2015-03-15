@@ -154,7 +154,7 @@ This format is taken directly from the RFC so that you can plug the values for
 the `STORE` command directly into this method signature.
 
 These arguments are documented in more detail in
-[RFC 3501](www.faqs.org/rfcs/rfc3501.html) section 6.4.6.
+[RFC 3501](http://www.faqs.org/rfcs/rfc3501.html) section 6.4.6.
 
 ## mailbox.expunge(box, cb)
 
